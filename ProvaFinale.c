@@ -5,7 +5,6 @@
 #define HASHARRAYSIZE 50 //lunghezza HashArray per le entità
 #define STRINGSIZE 50 //lunghezza Stringa
 #define RELATIONSARRAYSIZE 50 //lunghezza id_rel_array (per i tipi di relazione)
-#define EWNARRAYSIZE 50 //lunghezza di ogni EWNArray per indicare qual è l'entità con più relazioni di ogni tipo
 #define NOTFOUND 999
 int RelTypes=0;
 typedef char String[STRINGSIZE];
@@ -92,17 +91,19 @@ void insert_ent(String s,int h){
 
 //-------------------------------------------------------------------------------------------------
 //-----------------------------ID_REL_ARRAY--------------------------------------------------------
-struct entityWithNumber{//array per il report 
-    struct hash_entity *name;
+struct entityWithNumber{//lista doppiamente concatenata per il report 
+    struct hash_entity *ent;
     int n;
-    //struct entityWithNumber *next; perche è un array
+    struct entityWithNumber *next; 
+    struct entityWithNumber *prev; 
 };
 typedef struct entityWithNumber ewn;
 
 struct id_relation{//id rel array
     String id_rel;
     struct rel_instance *instance_list;
-    ewn EWNArray[EWNARRAYSIZE];
+    struct entityWithNumber *head_report_list;
+    
 };
 typedef struct id_relation relation;
 
@@ -161,22 +162,23 @@ typedef struct rel_instance instance;
  void add_rel_type(String rel_name, int i){//crea lo spazio per l'aggiunta e aggiunge
     printf("(ADDRELTYPE)\n");
     int j;
-    if(RelTypes==0){
+    if(RelTypes==0){//caso iniziale
         strcpy(id_rel_array[0].id_rel,rel_name);
         id_rel_array[0].instance_list=NULL;
-        RelTypes++;
+        RelTypes++;//incremento il numero di tipi di relazione monitorate
         return ;
     }else{
     for(j=RelTypes-1;j>=i;j--){
         strcpy(id_rel_array[j+1].id_rel,id_rel_array[j].id_rel);
         id_rel_array[j+1].instance_list=id_rel_array[j].instance_list;
-        //id_rel_array[j+1].EWNArray=id_rel_array[j].EWNArray;//???
+        id_rel_array[j+1].head_report_list=id_rel_array[j].head_report_list;
+        
     }
     strcpy(id_rel_array[i].id_rel,rel_name);
     id_rel_array[i].instance_list=NULL;
-    //ewn a;
-    //id_rel_array[i].EWNArray=a;//???
-    RelTypes++;
+    id_rel_array[i].head_report_list=NULL;
+    
+    RelTypes++;//incremento il numero di tipi di relazione monitorate
     }
     return;
  }
@@ -209,7 +211,139 @@ typedef struct rel_instance instance;
     printf("(ADDRELINSTANCE) inserimento istanza di relazione \n");
     return;
  }
+ 
+ 
+void add_ewn(ewn *head_lista, entity *dp, int p){
+     printf("(ADDEWN)\n");
+    //caso in cui sia stata inserita il tipo di relazione per la prima volta
+     ewn *punt;
+     punt = malloc(sizeof(ewn));
+     punt->prev=NULL;
+     punt->next=NULL;
+     punt->ent=dp;
+     punt->n=1;
+     //head_lista=punt;
+     id_rel_array[p].head_report_list=punt;
+     
+     printf("(ADDEWN)%s inserito in testa a reportlist con n=%d\n",id_rel_array[p].head_report_list->ent->name,id_rel_array[p].head_report_list->n);
+     printf("(ADDEWN)non c'è ancora una report list, aggiungo il nome e 1\n");
+     return;
+}
 
+void insert_ewn(ewn *cursore, entity *dp){
+    ewn *temp;
+    temp = malloc(sizeof(ewn));
+    temp->next=cursore;
+    temp->prev=cursore->prev;
+    temp->n=1;
+    temp->ent=dp;
+    cursore->prev->next=temp;//occhio cursore =temp
+    cursore->prev=temp;
+    printf("inserito \n");
+    //printf("(INCREMENTEWN)RL punta a %s\n", id_rel_array[pos].head_report_list->ent->name);
+    return;
+}
+
+void shift_position_up(ewn *pointer,ewn *hl, int pos){//pointer punta sempre all'entita incrementata
+    ewn *cursore;
+    cursore=pointer;
+    int caso=0;
+    int number=pointer->n;
+    printf("PROVA4 pointer->prev=%d\n",cursore->prev);
+    if(pointer==hl){//caso primo della lista,non faccio nulla
+        printf("sono gia il primo\n");
+        return;
+    }else{//non è il primo della lista
+        if(cursore->next!=NULL){
+            cursore->prev->next=cursore->next;//stacco l'entita(continua ad essere puntata da pointer
+            cursore->next->prev=cursore->prev;//stacco
+        }else{
+            cursore->prev->next=NULL;
+        }
+        caso=2;
+        while(cursore->prev->n < number||(cursore->prev->n == number && strcmp(pointer->ent->name, cursore->prev->ent->name)<0)){//comincio a spostare cursore fino al punto dove va inserito
+            caso=0;
+            cursore=cursore->prev;
+            if(cursore->prev==NULL){
+                caso=1;
+                break;
+            }
+        }
+        if(caso==2){//non sono mai entrato nel while, devo rimanere in fondo,lo riattacco in fondo
+            //pointer->next=NULL;
+            pointer->prev->next=cursore;
+            return;
+        }
+        
+        if(caso==1){
+            id_rel_array[pos].head_report_list=pointer;
+            cursore->prev=pointer;
+            pointer->prev=NULL;
+            pointer->next=cursore;
+            return;
+        
+        }else{
+            pointer->next=cursore;
+            pointer->prev=cursore->prev;
+            cursore->prev->next=pointer;
+            cursore->prev=pointer;
+        }
+        return;
+    
+    
+    }
+}
+
+void increment_ewn(ewn *head_lista, entity *dp, int pos){
+    ewn *cursore;
+    cursore=head_lista;
+    while(1){
+        if(strcmp(cursore->ent->name, dp->name)==0){//trovato, incremento e sposto
+            printf("(INCREMENTEWN)non devo inserire il nome perche è gia presente , incremento il numero e sistemo\n");
+            (*cursore).n++;
+            printf("prova n=%d\n",cursore->n);
+            shift_position_up(cursore, head_lista, pos);
+            return;
+        }
+        if(cursore->next==NULL){//siamo in fondo 
+            if(cursore->n>1||(strcmp(cursore->ent->name, dp->name)<0&&cursore->n==1)){//inserimento in coda
+                 ewn *temp;
+                 temp = malloc(sizeof(ewn));
+                 temp->next=NULL;
+                 temp->prev=cursore;
+                 temp->n=1;
+                 temp->ent=dp;
+                 cursore->next=temp;
+                 cursore=temp;
+                 printf("(INCREMENTEWN)inserito in coda \n");
+                 return;
+            }else if(cursore!=head_lista){//inserimento come penultimo
+                        printf("(INCREMENTEWN)inserito come penultimo \n");
+                        insert_ewn(cursore, dp);
+                        return;
+            }  
+        }
+        if(strcmp(cursore->ent->name, dp->name)>0&&cursore->n==1){
+            if(cursore==head_lista){//inserimento in testa
+                 ewn *temp;
+                 temp = malloc(sizeof(ewn));
+                 temp->next=cursore;
+                 temp->prev=cursore->prev;
+                 temp->n=1;
+                 temp->ent=dp;
+                 cursore->prev=temp;
+                 id_rel_array[pos].head_report_list=temp;
+                 printf("(INCREMENTEWN)inserito in testa\n");
+                 return;
+            }//inserimento in mezzo con n=1
+            insert_ewn(cursore,dp);
+            printf("(INCREMENTEWN)inserito in mezzo \n");
+            return;
+        }
+    cursore=cursore->next;
+    printf("(INCREMENTEWN)incrementato cursore\n");
+    }
+}
 
 void add_rel(String orig_ent, String dest_ent, String r){//aggiunge la relazione e modifica i vari array, se la relazione esiste gia o se una delle due entità coinvolte non sono monitorate non fa nulla
     printf("(ADD_REL) start\n");
@@ -219,25 +353,66 @@ void add_rel(String orig_ent, String dest_ent, String r){//aggiunge la relazione
     printf("%d\n", pos);
     entity *orig_punt=add_rel_search_ent(HashArray[h1],  orig_ent);//puntatore ad origEntity
     entity *dest_punt=add_rel_search_ent(HashArray[h2],  dest_ent);//puntatore ad destEntity
-    if(pos==NOTFOUND){//non esiste ancora quella relazione, la aggiungo e aggiungo anche l'istanza della relazione
-        int p= search_position_id_rel_array(r);//posizione dove inserire il tipo di relazione
-        add_rel_type(r,p);//aggiungo il tipo di relazione in ordine alfabetico
-        add_rel_instance(id_rel_array[p].instance_list, orig_punt, dest_punt, p);//aggiungo l'istanza di relazione
-        //gestione appropriata dell'array per il report
+    if(orig_punt==NULL || dest_punt==NULL){//caso in cui almeno una delle due entità non esiste
+        printf("(ADDREL)almeno una delle due entità non esiste!Non faccio nulla\n");
+    }else if(pos==NOTFOUND){//non esiste ancora quella relazione, la aggiungo e aggiungo anche l'istanza della relazione
+            int p= search_position_id_rel_array(r);//posizione dove inserire il tipo di relazione
+            add_rel_type(r,p);//aggiungo il tipo di relazione in ordine alfabetico
+            add_rel_instance(id_rel_array[p].instance_list, orig_punt, dest_punt, p);//aggiungo l'istanza di relazione
+            //gestione appropriata dell'array per il report
+            add_ewn(id_rel_array[p].head_report_list, dest_punt,p);
+            
+            
+            
     }else if (search_rel_instance(id_rel_array[pos].instance_list, orig_punt, dest_punt)==0){//se non esiste quella relazione
             add_rel_instance(id_rel_array[pos].instance_list, orig_punt, dest_punt, pos);//la aggiunge in testa alla lista
-            //gestione appropriata dell'array per il report
+            increment_ewn(id_rel_array[pos].head_report_list, dest_punt, pos);
+            
+           
           }
     }
 
 //------------------------------------------------------------------------------------------------------------------------------
+//--------------------------------------------------REPORT------------------------------------------------------------------------
+void print_report(){
+    int i,number,none=0;
+    ewn *cursore;
+    if(id_rel_array[0].instance_list==NULL&&id_rel_array[0].head_report_list==NULL){
+        printf("none\n");
+        return;
+    }
+    for(i=0 ;i<RelTypes;i++){
+        if(id_rel_array[i].head_report_list==NULL){//in caso il tipo di relazione non avesse nessuna istanza, non la stampo
+            
+        }else{
+        if(i!=0){
+            printf(" ");
+        }
+        
+        number=id_rel_array[i].head_report_list->n;
+        cursore=id_rel_array[i].head_report_list;
+        printf("%s ",id_rel_array[i].id_rel);
+        while(cursore->n==number){
+            printf("%s ",cursore->ent->name);
+            if(cursore->next==NULL){ 
+                break;
+            }
+            cursore=cursore->next;
+        }
+        printf("%d;",number);
+        }
+        if(i==RelTypes-1){
+            printf("\n");
+        }
+    }
+    
+    
+}
+
+
+//--------------------------------------------------------------------------------------------------------------------------------
 //--------------------------------------------------main------------------------------------------------------------------------
 int main(){
-    /*int lung=0;
-    for(int i=0, i<=HASHARRAYSIZE;i++){
-        lung++;
-    }
-    printf("%d lunghezza di hasharray", lung);*/
     do{
         strcpy(command,"");
         strcpy(name1,"");
@@ -282,12 +457,10 @@ int main(){
             
             
             printf("elimina realzione");
-        }else if(strcmp(command, "report\n")==0){
+        }else if(strcmp(command, "report")==0){
             //funzione per stampare output
+            print_report();
             
-            
-            
-            printf("stampa");
         }
     
     }while(strcmp(command,end)!=0);
