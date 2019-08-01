@@ -182,7 +182,7 @@ typedef struct rel_instance instance;
     }
     return;
  }
- int search_rel_instance(instance *lista, entity * op, entity *dp){//ricerca di determinata istanza di relazione nella lista di un tipo di relazione
+instance *search_rel_instance(instance *lista, entity * op, entity *dp){//ricerca di determinata istanza di relazione nella lista di un tipo di relazione
     printf("(SEARCHRELINSTANCE)\n");
     instance *cursore;
     if(lista!=NULL){
@@ -191,15 +191,17 @@ typedef struct rel_instance instance;
         while(cursore!=NULL){
             printf("entrato\n");
             if(cursore->orig==op && cursore->dest==dp){
-                 printf("c'è già!!!!\n");
-                return 1;
+                 printf("istanza di relazione c'è!!!!\n");
+                return cursore;
             }
         cursore=cursore->next;
         }
     }
    
-    return 0;
+    return NULL;
  }
+ 
+ 
  void add_rel_instance(instance *lista, entity * op, entity *dp,int p){//aggiunta di determinata istanza di relazione in testa alla lista di un tipo di relazione
     printf("(ADDRELINSTANCE)\n");
     instance *punt;
@@ -255,7 +257,7 @@ void shift_position_up(ewn *pointer,ewn *hl, int pos){//pointer punta sempre all
         return;
     }else{//non è il primo della lista
         if(cursore->next!=NULL){
-            cursore->prev->next=cursore->next;//stacco l'entita(continua ad essere puntata da pointer
+            cursore->prev->next=cursore->next;//stacco l'entita(continua ad essere puntata da pointer)
             cursore->next->prev=cursore->prev;//stacco
         }else{
             cursore->prev->next=NULL;
@@ -364,7 +366,7 @@ void add_rel(String orig_ent, String dest_ent, String r){//aggiunge la relazione
             
             
             
-    }else if (search_rel_instance(id_rel_array[pos].instance_list, orig_punt, dest_punt)==0){//se non esiste quella relazione
+    }else if (search_rel_instance(id_rel_array[pos].instance_list, orig_punt, dest_punt)==NULL){//se non esiste quella relazione
             add_rel_instance(id_rel_array[pos].instance_list, orig_punt, dest_punt, pos);//la aggiunge in testa alla lista
             increment_ewn(id_rel_array[pos].head_report_list, dest_punt, pos);
             
@@ -372,6 +374,176 @@ void add_rel(String orig_ent, String dest_ent, String r){//aggiunge la relazione
           }
     }
 
+//------------------------------------------------------------------------------------------------------------------------------
+//--------------------------------------------------DELREL----------------------------------------------------------------------
+void del_rel_type(int index){
+    int i=index;
+    if(index==RelTypes-1){
+        strcpy(id_rel_array[i].id_rel,"");//annullo id_rel, il resto dovrebbe essere già NULL
+        RelTypes--;
+        printf("(DELRELTYPE) ho eliminato il tipo di rel (era l'ultimo dell'array)\n");
+        printf("(DELRELTYPE) ora il numero di relazioni esistente è %d\n",RelTypes);
+        return;
+    }
+    while(i<=RelTypes){//se non è l'ultimo tipo dell'array, i successivi scorrono up
+        strcpy(id_rel_array[i].id_rel,id_rel_array[i+1].id_rel);
+        id_rel_array[i].instance_list=id_rel_array[i+1].instance_list;
+        id_rel_array[i].head_report_list=id_rel_array[i+1].head_report_list;
+        i++;
+    };
+    RelTypes--;//decremento il contatore dei tipi di relazione
+    printf("(DELRELTYPE) ho eliminato il tipo di rel\n");
+    printf("(DELRELTYPE) ora il numero di relazioni esistente è %d\n",RelTypes);
+    return;
+}
+void shift_position_down(ewn *pointer, int pos){//pointer punterà sempre all'elemnto da spostare
+    printf("(SHIFTPOSDOWN)start\n");
+    ewn *cursore;
+    cursore=pointer;
+    int caso=0;
+    int number=pointer->n;
+    if(id_rel_array[pos].head_report_list==pointer){//caso in testa alla lista
+        id_rel_array[pos].head_report_list=cursore->next;//stacco
+        cursore->next->prev=NULL;
+    }else{
+        cursore->next->prev=cursore->prev;//stacco
+        cursore->prev->next=cursore->next;
+    }
+    while(cursore->next->n > number||(cursore->next->n == number && strcmp(pointer->ent->name, cursore->next->ent->name)>0)){ 
+        cursore=cursore->next;
+        printf("(SHIFTPOSDOWN)incremento cursore\n");
+        if(cursore->next==NULL){
+            caso=1;
+            break;
+        }
+    };
+    if(caso==1){//inserito in fondo alla lista
+        printf("(SHIFTPOSDOWN)inserisco in fondo alla lista\n");
+        cursore->next=pointer;
+        pointer->next=NULL;
+        pointer->prev=cursore;
+        
+    }else{//inserito in mezzo
+    printf("(SHIFTPOSDOWN)inserisco in mezzo\n");
+        pointer->next=cursore->next;
+        pointer->prev=cursore;
+        cursore->next->prev=pointer;
+        cursore->next=pointer;
+    
+    }
+    return;
+    
+    
+}
+
+void decrement_ewn(entity *p, int position){//in seguito all'eliminazione  di un'istanza di relazione, decrementa la report list per l'entità ricevente
+    ewn *cursore=id_rel_array[position].head_report_list;
+    printf("(DECREMENTEWN)start\n");
+    if(cursore->next==NULL){//caso unico in lista (non puo essere n=1) quindi decremento e bon
+        (*cursore).n--;
+        printf("(DECREMENTEWN)è lunico, decremento n e basta\n");
+        return;
+    }
+    if(cursore->ent==p){//caso in cui l'entita da decrementare sia in testa alla report list
+        if(cursore->n==1){//se è in cima a report list ed n è 1
+            printf("(DECREMENTEWN)in testa, n=1, elimino ewn\n");
+            cursore->next->prev=NULL;
+            id_rel_array[position].head_report_list=cursore->next;
+            return;
+        }else{
+            printf("(DECREMENTEWN)in testa, chiamo shiftposdown\n");
+            (*cursore).n--;
+            shift_position_down(cursore, position);
+            return;
+        }
+    }
+    while(cursore->ent!=p&&cursore->next!=NULL){//cerco la ewn da decrementare
+    printf("(DECREMENTEWN)incremento cursore per cercare ewn corretta\n");
+        cursore=cursore->next;    
+    };
+    if(cursore->next==NULL){//se è in fondo alla report lista
+        (*cursore).n--;
+        
+        if(cursore->n==0){//se è zero tolgo, altrimenti nulla
+            printf("(DECREMENTEWN)il cursore è in fondo e n decrementato è 0, elimino\n");
+            cursore->prev->next=NULL;
+            return;
+        }
+         printf("(DECREMENTEWN)il cursore è in fondo e n decrementato NON è zero, lascio lì\n");
+        return;
+    } 
+    printf("(DECREMENTEWN) chiamo shiftposdown\n");
+    (*cursore).n--;
+    shift_position_down(cursore, position);
+}
+instance *search_rel_instance2(instance *lista, entity * op, entity *dp,int pos){//per la ricerce di istanza di relazione da eliminare
+    printf("(SEARCHRELINSTANCExDELREL)\n");
+    if(lista->orig==op&&lista->dest==dp&&lista->next==NULL){//l'istanza da eliminare è la prima e cè solo lei, lofaccio qui e ritorno NULL
+        id_rel_array[pos].instance_list=NULL;
+        id_rel_array[pos].head_report_list=NULL;
+        printf("istanza di relazione (l'unica) da eliminare trovata in testa ed eliminata!!!!\n");
+        del_rel_type(pos);
+        if(RelTypes==0){
+            printf("(SEARCHRELINSTANCE)l'array dei tipi di relazione è vuoto!\n");
+        }
+        return NULL;//cosi non fa la del_rel_instance
+    }else if(lista->orig==op&&lista->dest==dp){//caso eliminazione prima istanza della lista
+        decrement_ewn(lista->dest, pos);
+        id_rel_array[pos].instance_list=lista->next;
+        printf("eliminata la prima istanza di relazione!!!!\n");
+        
+        return NULL;//cosi non fa la del_rel_instance
+    }
+    instance *cursore;
+    cursore=lista;
+    while(cursore->next!=NULL){
+        printf("entrato\n");
+        if(cursore->next->orig==op&&cursore->next->dest==dp){
+            printf("istanza di relazione da eliminare trovata!!!!\n");
+            return cursore;
+        }
+        cursore=cursore->next;
+    }
+    printf("questa istanza di relazione non esiste, non faccio nulla\n");
+    return NULL;
+ }
+ 
+void del_rel_instance(instance *hl, instance *p, int pos){
+    printf("(DELRELINSTANCE)\n");
+    printf("(DELRELINSTANCE)elimino listanza di relazione\n");
+    decrement_ewn(p->next->dest, pos);//attenzione che p punta all'istanza precedente 
+    p->next=p->next->next;
+    
+    return;
+    
+
+}
+
+void del_rel(String orig_ent, String dest_ent, String r){
+    printf("(DEL_REL) start\n");
+    h1=hash(orig_ent);
+    h2=hash(dest_ent);
+    entity *orig_punt=add_rel_search_ent(HashArray[h1],  orig_ent);//puntatore ad origEntity
+    entity *dest_punt=add_rel_search_ent(HashArray[h2],  dest_ent);//puntatore ad destEntity
+    if(orig_punt==NULL||dest_punt==NULL){
+        printf("(DELREL)almeno una delle due entità inserite non esiste, non faccio nulla\n");
+        return;
+    }
+    int pos= search_rel(r);//posizione di id_rel_array di r
+    printf("%d\n", pos);
+    if(pos==NOTFOUND){
+        printf("(DELREL)questo tipo di relazione non esiste, non faccio nulla\n");
+        return;
+    }
+    instance *punt;
+    punt=search_rel_instance2(id_rel_array[pos].instance_list, orig_punt, dest_punt, pos);//puntatore all'istanza precedente l'istanza da eliminare, se è la prima 
+    if(punt==NULL){
+        return;
+    }else{//la relazione esiste, la elimino
+        del_rel_instance(id_rel_array[pos].instance_list, punt, pos);
+    }
+    return;
+}
 //------------------------------------------------------------------------------------------------------------------------------
 //--------------------------------------------------REPORT------------------------------------------------------------------------
 void print_report(){
@@ -453,10 +625,10 @@ int main(){
             //printf("aggiungi relazione\n");
         }else if(strcmp(command, "delrel")==0){
             //funzioni per aggeliminare relazione
+            del_rel(name1, name2, rel);
             
             
-            
-            printf("elimina realzione");
+            printf("elimina relazione\n");
         }else if(strcmp(command, "report")==0){
             //funzione per stampare output
             print_report();
