@@ -74,23 +74,8 @@ void insert_ent(String s,int h){
     return 0;
     
  }
- //cancellazione enità da HashArray
- int delete_ent(entity *lista, String s){
-    entity * punttemp;
-    if(lista != NULL){
-        if(strcmp(lista->name, s)==0){
-            printf("(DELETE)elimino %s\n",s);
-            punttemp=lista;
-            lista=punttemp->next;
-            free(punttemp);
-        }
-        else delete_ent((lista->next), s);   
-        //implementare l'eliminazione delle relazioni che coinvolgono s
-    }
- }
-
-//-------------------------------------------------------------------------------------------------
-//-----------------------------ID_REL_ARRAY--------------------------------------------------------
+//-------------------------------------------------------------------------------------------------------------------------------
+//-----------------------------ID_REL_ARRAY--------------------------------------------------------------------------------------
 struct entityWithNumber{//lista doppiamente concatenata per il report 
     struct hash_entity *ent;
     int n;
@@ -381,8 +366,10 @@ void del_rel_type(int index){
     if(index==RelTypes-1){
         strcpy(id_rel_array[i].id_rel,"");//annullo id_rel, il resto dovrebbe essere già NULL
         RelTypes--;
+        id_rel_array[i].head_report_list=NULL;
         printf("(DELRELTYPE) ho eliminato il tipo di rel (era l'ultimo dell'array)\n");
         printf("(DELRELTYPE) ora il numero di relazioni esistente è %d\n",RelTypes);
+        
         return;
     }
     while(i<=RelTypes){//se non è l'ultimo tipo dell'array, i successivi scorrono up
@@ -545,6 +532,98 @@ void del_rel(String orig_ent, String dest_ent, String r){
     return;
 }
 //------------------------------------------------------------------------------------------------------------------------------
+//-------------------------------------------------DELENT-----------------------------------------------------------------------
+/*void delete_all_rel(entity *ent){
+    int i;
+    instance *cursore;
+    instance *pointer;
+    for(i=RelTypes-1;i>=0;i--){
+        cursore=id_rel_array[i].instance_list;
+        pointer=id_rel_array[i].instance_list;
+        while(1){
+            if((pointer->orig==ent||pointer->dest==ent)&&pointer->next==NULL&&id_rel_array[i].instance_list==pointer){//istanza da eliminare è la prima e unica
+                decrement_ewn(pointer->dest, i);//decremento ewn
+                id_rel_array[i].instance_list=NULL;
+                id_rel_array[i].head_report_list=NULL;
+                del_rel_type(i);
+                break;
+            }else if((pointer->orig==ent||pointer->dest==ent)&&pointer->next!=NULL&&id_rel_array[i].instance_list==pointer){//istanza da eliminare è la prima, ma non unica
+                
+                decrement_ewn(pointer->dest, i);//decremento ewn
+                id_rel_array[i].instance_list=pointer->next;
+                pointer=id_rel_array[i].instance_list;
+                cursore=pointer->next;
+            
+            }else if((cursore->orig==ent||cursore->dest==ent)){
+                del_rel_instance(id_rel_array[i].instance_list, pointer, i);
+            }
+            if(cursore==NULL){
+            
+            
+            }
+        
+        
+        };
+        //inc cursore e pointer
+        pointer=cursore->next;
+        cursore=pointer->next;
+    }
+
+
+
+}*/
+void delete_all_rel(entity *ent){
+    int i;
+    instance *cursore;
+    //instance *pointer;
+    for(i=RelTypes-1;i>=0;i--){
+        printf("(DELETEALLREL)start cercando in posizione di idrelarray %d\n",i);
+        cursore=id_rel_array[i].instance_list;
+        if(cursore->orig==ent||cursore->dest==ent){
+        while(cursore->orig==ent||cursore->dest==ent){
+            printf("(DELETEALLREL)trovata relazione che comprende %s in cima alla instancelist\n",ent->name);
+            decrement_ewn(cursore->dest, i);//decremento ewn
+            id_rel_array[i].instance_list=cursore->next;
+            cursore=id_rel_array[i].instance_list;
+            if(cursore==NULL){
+                del_rel_type(i);
+                break;
+                //return;
+            }
+        };
+        }else{
+        while(cursore->next!=NULL){
+            if(cursore->next->orig==ent||cursore->next->dest==ent){
+                 printf("(DELETEALLREL)trovata relazione che comprende %s\n",ent->name);
+                 decrement_ewn(cursore->next->dest, i);//decremento ewn
+                 cursore->next=cursore->next->next;
+                
+            }else{
+                 printf("(DELETEALLREL)incremento\n");
+                cursore=cursore->next;
+            }
+        };
+        }
+        printf("(DELETEALLREL)ora i è %d\n", i);
+    }
+    return;
+}
+int delete_ent(entity *lista, String s){
+    
+    entity * punttemp;
+    if(lista != NULL){
+        if(strcmp(lista->name, s)==0){
+            delete_all_rel(lista);//lista punta all'entità da eliminare
+            printf("(DELETE)elimino %s\n",s);
+            punttemp=lista;
+            lista=punttemp->next;
+            free(punttemp);
+        }
+        else delete_ent((lista->next), s);   
+        //implementare l'eliminazione delle relazioni che coinvolgono s
+    }
+}
+//---------------------------------------------------------------------------------------------------------------------------------
 //--------------------------------------------------REPORT------------------------------------------------------------------------
 void print_report(){
     int i,number,none=0;
@@ -610,25 +689,24 @@ int main(){
         }else if(strcmp(command, "delent")==0){
             //funzioni per eliminare entità
             h1=hash(name1);
-            printf("(MAIN DELETE) la chiave di %s è %d\n",name1, h1);
+            //printf("(MAIN DELETE) la chiave di %s è %d\n",name1, h1);
             if(search_ent(HashArray[h1], name1)==1){//se presente
                 printf("(MAIN DELETE) TROVATO, la elimino\n");
+                
                 delete_ent(HashArray[h1], name1);//elimina entità (manca la gestione delle relazione che coinvolgono quell'entità)
+                
             }else{//cerca l'entità da eliminare
                 printf("(MAIN DELETE)stringa non trovata non faccio nulla\n");
-            }
-            
+            }    
             //printf("elimina entità\n");
         }else if(strcmp(command, "addrel")==0){
             //funzioni per aggiungere relazione
             add_rel(name1, name2, rel);
             //printf("aggiungi relazione\n");
         }else if(strcmp(command, "delrel")==0){
-            //funzioni per aggeliminare relazione
+            //funzioni per eliminare relazione
             del_rel(name1, name2, rel);
-            
-            
-            printf("elimina relazione\n");
+            //printf("elimina relazione\n");
         }else if(strcmp(command, "report")==0){
             //funzione per stampare output
             print_report();
